@@ -1,4 +1,3 @@
-import time
 import asyncio
 import curses
 import random
@@ -7,13 +6,14 @@ import os
 
 import animation 
 
+TIC_TIMEOUT = 0.1
+
 
 def load_frames(path):
     with open(path, 'r', encoding='utf-8') as f:
         return f.read()
 
 
-# считаем, что все файлы кадров лежат в папке `frames/`
 FRAMES_DIR = os.path.join(os.path.dirname(__file__), 'frames')
 
 
@@ -45,25 +45,42 @@ async def blink(canvas, row, column, symbol='*'):
                 await asyncio.sleep(0)
 
 
-async def animate_spaceship(canvas, row, column, frames, pause=0.1):
+async def animate_spaceship(canvas, pos, frames, pause=TIC_TIMEOUT):
     prev_frame = frames[-1]
-    for frame in cycle(frames):
-        # 1) стереть то, что было
-        animation.draw_frame(canvas, row, column, prev_frame, negative=True)
-        # 2) нарисовать то, что стало
-        animation.draw_frame(canvas, row, column, frame, negative=False)
+    prev_pos = dict(pos)
+    frame_iter = cycle(frames)
+
+    while True:
+        frame = next(frame_iter)
+        curr_pos = {'row': pos['row'], 'col': pos['col']}
+
+        animation.draw_frame(canvas,
+                             prev_pos['row'], prev_pos['col'],
+                             prev_frame,
+                             negative=True)
+
+        animation.draw_frame(canvas,
+                             curr_pos['row'], curr_pos['col'],
+                             frame,
+                             negative=False)
+
         canvas.refresh()
         await asyncio.sleep(pause)
-        # 3) запомним, что это теперь «предыдущее»
+
         prev_frame = frame
-    # for frame in cycle(frames):
-    #     # 1) заливаем фон под кораблём (чтобы старое пламя исчезло),
-    #     #    но только в области кадра, а не везде целиком:
-    #     animation.draw_frame(canvas, row, column, frame, negative=True)
-    #     # 2) рисуем новый кадр:
-    #     animation.draw_frame(canvas, row, column, frame, negative=False)
-    #     canvas.refresh()
-    #     await asyncio.sleep(pause)
+        prev_pos = curr_pos
+
+
+async def control_spaceship(canvas, pos):
+    """
+    Каждые TIC_TIMEOUT читаем стрелки и правим pos['row'], pos['col'].
+    """
+    max_row, max_col = canvas.getmaxyx()
+    while True:
+        d_row, d_col, _ = animation.read_controls(canvas)
+        pos['row'] = max(1, min(max_row - 2, pos['row'] + d_row))
+        pos['col'] = max(1, min(max_col - 2, pos['col'] + d_col))
+        await asyncio.sleep(TIC_TIMEOUT)
 
 
 async def draw(canvas):
@@ -82,18 +99,24 @@ async def draw(canvas):
         tasks.append(asyncio.create_task(blink(canvas, row, column, symbol)))
 
     center_row, center_col = max_row // 2, max_col // 2
-    ship_row = center_row - (len(spaceship_frames[0].splitlines()) // 2)
-    ship_col = center_col - (max(map(len, spaceship_frames[0].splitlines())) // 2)
 
     tasks.append(asyncio.create_task(
         fire(canvas, center_row, center_col,
              rows_speed=-0.3, columns_speed=0)
     ))
 
-    tasks.append(asyncio.create_task(
-        animate_spaceship(canvas, ship_row, ship_col, spaceship_frames)
-        ))
+    pos = {
+        'row': max_row // 2,
+        'col': max_col // 2,
+    }
 
+    tasks.append(asyncio.create_task(
+        control_spaceship(canvas, pos)
+    ))
+
+    tasks.append(asyncio.create_task(
+        animate_spaceship(canvas, pos, spaceship_frames)
+    ))
     try:
         while True:
             canvas.border()
