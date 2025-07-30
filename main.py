@@ -71,16 +71,30 @@ async def animate_spaceship(canvas, pos, frames, pause=TIC_TIMEOUT):
         prev_pos = curr_pos
 
 
-async def control_spaceship(canvas, pos):
+async def control_spaceship(canvas, pos, ship_rows, ship_cols):
     """
     Каждые TIC_TIMEOUT читаем стрелки и правим pos['row'], pos['col'].
     """
     max_row, max_col = canvas.getmaxyx()
+    # допустимый диапазон для верхнего‑левого угла кадра:
+    min_row = 1
+    max_pos_row = max_row - ship_rows - 1
+    min_col = 1
+    max_pos_col = max_col - ship_cols - 1
+
     while True:
         d_row, d_col, _ = animation.read_controls(canvas)
-        pos['row'] = max(1, min(max_row - 2, pos['row'] + d_row))
-        pos['col'] = max(1, min(max_col - 2, pos['col'] + d_col))
+        new_row = pos['row'] + d_row
+        new_col = pos['col'] + d_col
+
+        pos['row'] = min(max(min_row, new_row), max_pos_row)
+        pos['col'] = min(max(min_col, new_col), max_pos_col)
         await asyncio.sleep(TIC_TIMEOUT)
+    # while True:
+    #     d_row, d_col, _ = animation.read_controls(canvas)
+    #     pos['row'] = max(1, min(max_row - 2, pos['row'] + d_row))
+    #     pos['col'] = max(1, min(max_col - 2, pos['col'] + d_col))
+    #     await asyncio.sleep(TIC_TIMEOUT)
 
 
 async def draw(canvas):
@@ -90,6 +104,7 @@ async def draw(canvas):
     canvas.border()
 
     max_row, max_col = canvas.getmaxyx()
+    ship_rows, ship_cols = animation.get_frame_size(spaceship_frames[0])
 
     tasks = []
     for _ in range(100):
@@ -111,7 +126,7 @@ async def draw(canvas):
     }
 
     tasks.append(asyncio.create_task(
-        control_spaceship(canvas, pos)
+        control_spaceship(canvas, pos, ship_rows, ship_cols)
     ))
 
     tasks.append(asyncio.create_task(
