@@ -1,14 +1,29 @@
-import asyncio
 import curses
 import random
-from itertools import cycle
+import time
 import os
+from itertools import cycle
+import asyncio
 
-import animation 
+import animation
 
-TIC_TIMEOUT = 0.1
 
+class DummySleep:
+    def __init__(self, delay):
+        self.delay = delay
+
+    def __await__(self):
+
+        yield None
+        return
+
+
+asyncio.sleep = lambda delay: DummySleep(delay)
+
+
+tic_timeout = 0.1
 FRAMES_DIR = os.path.join(os.path.dirname(__file__), 'frames')
+
 
 BLINK_FRAMES = [
     (curses.A_DIM,    20),
@@ -19,170 +34,126 @@ BLINK_FRAMES = [
 TOTAL_TICKS = sum(cnt for _, cnt in BLINK_FRAMES)
 
 
-def load_frames(path):
+def load_frame(path):
     with open(path, 'r', encoding='utf-8') as f:
         return f.read()
 
 
 spaceship_frames = [
-    load_frames(os.path.join(FRAMES_DIR, 'rocket_frame_1.txt')),
-    load_frames(os.path.join(FRAMES_DIR, 'rocket_frame_2.txt')),
+    load_frame(os.path.join(FRAMES_DIR, 'rocket_frame_1.txt')),
+    load_frame(os.path.join(FRAMES_DIR, 'rocket_frame_2.txt')),
 ]
 
 
-async def blink(canvas, row, column, symbol='*', offset_ticks=0, *, frames):
+def blink(canvas, row, col, symbol='*', offset=0, frames=BLINK_FRAMES):
+    async def _blink():
+        # initial offset
+        for _ in range(offset):
+            await asyncio.sleep(0)
+        while True:
+            for attr, count in frames:
+                for _ in range(count):
+                    canvas.addstr(row, col, symbol, attr)
+                    await asyncio.sleep(0)
+    return _blink()
 
-    for _ in range(offset_ticks):
+
+def animate_spaceship(canvas, pos, frames, pause=tic_timeout):
+    async def _anim():
+        prev = frames[-1]
+        prev_pos = dict(pos)
+        iter_frames = cycle(frames)
+        while True:
+            frame = next(iter_frames)
+            curr_pos = {'row': pos['row'], 'col': pos['col']}
+            animation.draw_frame(canvas, prev_pos['row'], prev_pos['col'], prev, negative=True)
+            animation.draw_frame(canvas, curr_pos['row'], curr_pos['col'], frame, negative=False)
+            await asyncio.sleep(pause)
+            prev, prev_pos = frame, curr_pos
+    return _anim()
+
+
+def control_spaceship(canvas, pos, ship_h, ship_w):
+    async def _control():
+        max_r, max_c = canvas.getmaxyx()
+        min_r, min_c = 1, 1
+        max_rpos = max_r - ship_h - 1
+        max_cpos = max_c - ship_w - 1
+        while True:
+            dr, dc, _ = animation.read_controls(canvas)
+            nr = pos['row'] + dr
+            nc = pos['col'] + dc
+            pos['row'] = min(max(min_r, nr), max_rpos)
+            pos['col'] = min(max(min_c, nc), max_cpos)
+            await asyncio.sleep(tic_timeout)
+    return _control()
+
+
+async def fire(canvas, start_r, start_c, rows_speed=-0.3, cols_speed=0):
+    r, c = start_r, start_c
+    canvas.addstr(round(r), round(c), '*')
+    await asyncio.sleep(0)
+    canvas.addstr(round(r), round(c), 'O')
+    await asyncio.sleep(0)
+    canvas.addstr(round(r), round(c), ' ')
+    r += rows_speed
+    c += cols_speed
+    sym = '-' if cols_speed else '|'
+    max_r, max_c = canvas.getmaxyx()
+    curses.beep()
+    while 0 < r < max_r and 0 < c < max_c:
+        canvas.addstr(round(r), round(c), sym)
         await asyncio.sleep(0)
-
-    while True:
-        for attr, repeats in frames:
-            for _ in range(repeats):
-                canvas.addstr(row, column, symbol, attr)
-                await asyncio.sleep(0)
+        canvas.addstr(round(r), round(c), ' ')
+        r += rows_speed
+        c += cols_speed
 
 
-async def animate_spaceship(canvas, pos, frames, pause=TIC_TIMEOUT):
-    prev_frame = frames[-1]
-    prev_pos = dict(pos)
-    frame_iter = cycle(frames)
-
-    while True:
-        frame = next(frame_iter)
-        curr_pos = {'row': pos['row'], 'col': pos['col']}
-
-        animation.draw_frame(canvas,
-                             prev_pos['row'], prev_pos['col'],
-                             prev_frame,
-                             negative=True)
-
-        animation.draw_frame(canvas,
-                             curr_pos['row'], curr_pos['col'],
-                             frame,
-                             negative=False)
-
-        await asyncio.sleep(pause)
-
-        prev_frame = frame
-        prev_pos = curr_pos
+def run_event_loop(canvas, coros):
+    try:
+        while coros:
+            for coro in coros.copy():
+                try:
+                    coro.send(None)
+                except StopIteration:
+                    coros.remove(coro)
+            canvas.border()
+            canvas.refresh()
+            time.sleep(tic_timeout)
+    except KeyboardInterrupt:
+        return
 
 
-async def control_spaceship(canvas, pos, ship_rows, ship_cols):
-    """
-    Каждые TIC_TIMEOUT читаем стрелки и правим pos['row'], pos['col'].
-    """
-    max_row, max_col = canvas.getmaxyx()
-    min_row = 1
-    max_pos_row = max_row - ship_rows - 1
-    min_col = 1
-    max_pos_col = max_col - ship_cols - 1
-
-    while True:
-        d_row, d_col, _ = animation.read_controls(canvas)
-        new_row = pos['row'] + d_row
-        new_col = pos['col'] + d_col
-
-        pos['row'] = min(max(min_row, new_row), max_pos_row)
-        pos['col'] = min(max(min_col, new_col), max_pos_col)
-        await asyncio.sleep(TIC_TIMEOUT)
-
-
-async def draw(canvas):
-    TIC_TIMEOUT = 0.1
+def draw(canvas):
     curses.curs_set(False)
     canvas.nodelay(True)
     canvas.border()
+    max_r, max_c = canvas.getmaxyx()
+    ship_h, ship_w = animation.get_frame_size(spaceship_frames[0])
 
-    max_row, max_col = canvas.getmaxyx()
-    ship_rows, ship_cols = animation.get_frame_size(spaceship_frames[0])
-
-    tasks = []
+    coros = []
 
     for _ in range(100):
-        row = random.randint(1, max_row - 2)
-        column = random.randint(1, max_col - 2)
-        symbol = random.choice('+*.:')
+        r = random.randint(1, max_r-2)
+        c = random.randint(1, max_c-2)
+        sym = random.choice('+*.:')
         phase = random.randrange(TOTAL_TICKS)
-        tasks.append(asyncio.create_task(
-            blink(
-                canvas,
-                row,
-                column,
-                symbol,
-                offset_ticks=phase,
-                frames=BLINK_FRAMES
-                )
-        ))
+        coros.append(blink(canvas, r, c, sym, offset=phase))
 
-    center_row, center_col = max_row // 2, max_col // 2
+    mid_r, mid_c = max_r//2, max_c//2
+    coros.append(fire(canvas, mid_r, mid_c, rows_speed=-0.3, cols_speed=0))
 
-    tasks.append(asyncio.create_task(
-        fire(canvas, center_row, center_col,
-             rows_speed=-0.3, columns_speed=0)
-    ))
+    pos = {'row': mid_r, 'col': mid_c}
+    coros.append(control_spaceship(canvas, pos, ship_h, ship_w))
+    coros.append(animate_spaceship(canvas, pos, spaceship_frames))
 
-    pos = {
-        'row': max_row // 2,
-        'col': max_col // 2,
-    }
-
-    tasks.append(asyncio.create_task(
-        control_spaceship(canvas, pos, ship_rows, ship_cols)
-    ))
-
-    tasks.append(asyncio.create_task(
-        animate_spaceship(canvas, pos, spaceship_frames)
-    ))
-    try:
-        while True:
-            canvas.border()
-            canvas.refresh()
-            await asyncio.sleep(TIC_TIMEOUT)
-    except (asyncio.CancelledError, KeyboardInterrupt):
-        for t in tasks:
-            t.cancel()
-        raise
-
-
-async def fire(canvas, start_row, start_column, rows_speed=-0.3, columns_speed=0):
-    """Display animation of gun shot, direction and speed can be specified."""
-
-    row, column = start_row, start_column
-
-    canvas.addstr(round(row), round(column), '*')
-    await asyncio.sleep(0)
-
-    canvas.addstr(round(row), round(column), 'O')
-    await asyncio.sleep(0)
-    canvas.addstr(round(row), round(column), ' ')
-
-    row += rows_speed
-    column += columns_speed
-
-    symbol = '-' if columns_speed else '|'
-
-    rows, columns = canvas.getmaxyx()
-    max_row, max_column = rows - 1, columns - 1
-
-    curses.beep()
-
-    while 0 < row < max_row and 0 < column < max_column:
-        canvas.addstr(round(row), round(column), symbol)
-        await asyncio.sleep(0)
-        canvas.addstr(round(row), round(column), ' ')
-        row += rows_speed
-        column += columns_speed
+    run_event_loop(canvas, coros)
 
 
 def main():
     curses.update_lines_cols()
-    curses.wrapper(lambda stdscr: asyncio.run(draw(stdscr)))
+    curses.wrapper(draw)
 
 
 if __name__ == '__main__':
-    print("Frames directory:", FRAMES_DIR)
-    print("Files:", os.listdir(FRAMES_DIR))
-    print("Frame #1 sample:\n", spaceship_frames[0][:30])
-    input("Нажмите Enter, чтобы запустить игру...")
-    curses.update_lines_cols()
-    curses.wrapper(lambda stdscr: asyncio.run(draw(stdscr)))
+    main()
