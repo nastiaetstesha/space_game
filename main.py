@@ -66,8 +66,12 @@ def animate_spaceship(canvas, pos, frames, pause=tic_timeout):
         while True:
             frame = next(iter_frames)
             curr_pos = {'row': pos['row'], 'col': pos['col']}
-            animation.draw_frame(canvas, prev_pos['row'], prev_pos['col'], prev, negative=True)
-            animation.draw_frame(canvas, curr_pos['row'], curr_pos['col'], frame, negative=False)
+            animation.draw_frame(
+                canvas, prev_pos['row'], prev_pos['col'], prev, negative=True
+                )
+            animation.draw_frame(
+                canvas, curr_pos['row'], curr_pos['col'], frame, negative=False
+                )
             await asyncio.sleep(pause)
             prev, prev_pos = frame, curr_pos
     return _anim()
