@@ -8,13 +8,20 @@ import animation
 
 TIC_TIMEOUT = 0.1
 
+FRAMES_DIR = os.path.join(os.path.dirname(__file__), 'frames')
+
+BLINK_FRAMES = [
+    (curses.A_DIM,    20),
+    (curses.A_NORMAL,  3),
+    (curses.A_BOLD,    5),
+    (curses.A_NORMAL,  3),
+]
+TOTAL_TICKS = sum(cnt for _, cnt in BLINK_FRAMES)
+
 
 def load_frames(path):
     with open(path, 'r', encoding='utf-8') as f:
         return f.read()
-
-
-FRAMES_DIR = os.path.join(os.path.dirname(__file__), 'frames')
 
 
 spaceship_frames = [
@@ -23,25 +30,15 @@ spaceship_frames = [
 ]
 
 
-async def blink(canvas, row, column, symbol='*'):
+async def blink(canvas, row, column, symbol='*', offset_ticks=0, *, frames):
 
-    frames = [
-            (curses.A_DIM,    20),
-            (curses.A_NORMAL,  3),
-            (curses.A_BOLD,    5),
-            (curses.A_NORMAL,  3),
-        ]
-    
-    total_ticks = sum(repeats for _, repeats in frames)
-
-    phase = random.randint(0, total_ticks - 1)
-    for _ in range(phase):
+    for _ in range(offset_ticks):
         await asyncio.sleep(0)
+
     while True:
         for attr, repeats in frames:
             for _ in range(repeats):
                 canvas.addstr(row, column, symbol, attr)
-                canvas.refresh()
                 await asyncio.sleep(0)
 
 
@@ -64,7 +61,6 @@ async def animate_spaceship(canvas, pos, frames, pause=TIC_TIMEOUT):
                              frame,
                              negative=False)
 
-        canvas.refresh()
         await asyncio.sleep(pause)
 
         prev_frame = frame
@@ -76,7 +72,6 @@ async def control_spaceship(canvas, pos, ship_rows, ship_cols):
     Каждые TIC_TIMEOUT читаем стрелки и правим pos['row'], pos['col'].
     """
     max_row, max_col = canvas.getmaxyx()
-    # допустимый диапазон для верхнего‑левого угла кадра:
     min_row = 1
     max_pos_row = max_row - ship_rows - 1
     min_col = 1
@@ -90,11 +85,6 @@ async def control_spaceship(canvas, pos, ship_rows, ship_cols):
         pos['row'] = min(max(min_row, new_row), max_pos_row)
         pos['col'] = min(max(min_col, new_col), max_pos_col)
         await asyncio.sleep(TIC_TIMEOUT)
-    # while True:
-    #     d_row, d_col, _ = animation.read_controls(canvas)
-    #     pos['row'] = max(1, min(max_row - 2, pos['row'] + d_row))
-    #     pos['col'] = max(1, min(max_col - 2, pos['col'] + d_col))
-    #     await asyncio.sleep(TIC_TIMEOUT)
 
 
 async def draw(canvas):
@@ -107,11 +97,22 @@ async def draw(canvas):
     ship_rows, ship_cols = animation.get_frame_size(spaceship_frames[0])
 
     tasks = []
+
     for _ in range(100):
         row = random.randint(1, max_row - 2)
         column = random.randint(1, max_col - 2)
         symbol = random.choice('+*.:')
-        tasks.append(asyncio.create_task(blink(canvas, row, column, symbol)))
+        phase = random.randrange(TOTAL_TICKS)
+        tasks.append(asyncio.create_task(
+            blink(
+                canvas,
+                row,
+                column,
+                symbol,
+                offset_ticks=phase,
+                frames=BLINK_FRAMES
+                )
+        ))
 
     center_row, center_col = max_row // 2, max_col // 2
 
