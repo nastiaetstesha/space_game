@@ -8,20 +8,7 @@ import asyncio
 import animation
 
 
-class DummySleep:
-    def __init__(self, delay):
-        self.delay = delay
-
-    def __await__(self):
-
-        yield None
-        return
-
-
-asyncio.sleep = lambda delay: DummySleep(delay)
-
-
-tic_timeout = 0.1
+TIC_TIMEOUT = 0.1
 FRAMES_DIR = os.path.join(os.path.dirname(__file__), 'frames')
 
 
@@ -47,7 +34,7 @@ spaceship_frames = [
 
 def blink(canvas, row, col, symbol='*', offset=0, frames=BLINK_FRAMES):
     async def _blink():
-        # initial offset
+
         for _ in range(offset):
             await asyncio.sleep(0)
         while True:
@@ -58,7 +45,7 @@ def blink(canvas, row, col, symbol='*', offset=0, frames=BLINK_FRAMES):
     return _blink()
 
 
-def animate_spaceship(canvas, pos, frames, pause=tic_timeout):
+def animate_spaceship(canvas, pos, frames, pause=TIC_TIMEOUT):
     async def _anim():
         prev = frames[-1]
         prev_pos = dict(pos)
@@ -72,7 +59,10 @@ def animate_spaceship(canvas, pos, frames, pause=tic_timeout):
             animation.draw_frame(
                 canvas, curr_pos['row'], curr_pos['col'], frame, negative=False
                 )
-            await asyncio.sleep(pause)
+            ticks = int(pause / TIC_TIMEOUT)
+            for _ in range(ticks):
+                await asyncio.sleep(0)
+
             prev, prev_pos = frame, curr_pos
     return _anim()
 
@@ -89,7 +79,7 @@ def control_spaceship(canvas, pos, ship_h, ship_w):
             nc = pos['col'] + dc
             pos['row'] = min(max(min_r, nr), max_rpos)
             pos['col'] = min(max(min_c, nc), max_cpos)
-            await asyncio.sleep(tic_timeout)
+            await asyncio.sleep(0)
     return _control()
 
 
@@ -113,7 +103,30 @@ async def fire(canvas, start_r, start_c, rows_speed=-0.3, cols_speed=0):
         c += cols_speed
 
 
-def run_event_loop(canvas, coros):
+def draw(canvas):
+    curses.curs_set(False)
+    canvas.nodelay(True)
+    canvas.border()
+
+    max_r, max_c = canvas.getmaxyx()
+    ship_h, ship_w = animation.get_frame_size(spaceship_frames[0])
+
+    coros = []
+
+    for _ in range(100):
+        r = random.randint(1, max_r - 2)
+        c = random.randint(1, max_c - 2)
+        sym = random.choice('+*.:')
+        phase = random.randrange(TOTAL_TICKS)
+        coros.append(blink(canvas, r, c, sym, offset=phase))
+
+    mid_r, mid_c = max_r // 2, max_c // 2
+    coros.append(fire(canvas, mid_r, mid_c, rows_speed=-0.3, cols_speed=0))
+
+    pos = {'row': mid_r, 'col': mid_c}
+    coros.append(control_spaceship(canvas, pos, ship_h, ship_w))
+    coros.append(animate_spaceship(canvas, pos, spaceship_frames))
+
     try:
         while coros:
             for coro in coros.copy():
@@ -123,35 +136,9 @@ def run_event_loop(canvas, coros):
                     coros.remove(coro)
             canvas.border()
             canvas.refresh()
-            time.sleep(tic_timeout)
+            time.sleep(TIC_TIMEOUT)
     except KeyboardInterrupt:
-        return
-
-
-def draw(canvas):
-    curses.curs_set(False)
-    canvas.nodelay(True)
-    canvas.border()
-    max_r, max_c = canvas.getmaxyx()
-    ship_h, ship_w = animation.get_frame_size(spaceship_frames[0])
-
-    coros = []
-
-    for _ in range(100):
-        r = random.randint(1, max_r-2)
-        c = random.randint(1, max_c-2)
-        sym = random.choice('+*.:')
-        phase = random.randrange(TOTAL_TICKS)
-        coros.append(blink(canvas, r, c, sym, offset=phase))
-
-    mid_r, mid_c = max_r//2, max_c//2
-    coros.append(fire(canvas, mid_r, mid_c, rows_speed=-0.3, cols_speed=0))
-
-    pos = {'row': mid_r, 'col': mid_c}
-    coros.append(control_spaceship(canvas, pos, ship_h, ship_w))
-    coros.append(animate_spaceship(canvas, pos, spaceship_frames))
-
-    run_event_loop(canvas, coros)
+        pass
 
 
 def main():
