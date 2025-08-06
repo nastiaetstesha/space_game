@@ -6,10 +6,11 @@ from itertools import cycle
 import asyncio
 
 import animation
-
+import space_garbage
 
 TIC_TIMEOUT = 0.1
 FRAMES_DIR = os.path.join(os.path.dirname(__file__), 'frames')
+GARBAGE_DIR = os.path.join(os.path.dirname(__file__), 'garbage')
 
 
 BLINK_FRAMES = [
@@ -30,6 +31,13 @@ spaceship_frames = [
     load_frame(os.path.join(FRAMES_DIR, 'rocket_frame_1.txt')),
     load_frame(os.path.join(FRAMES_DIR, 'rocket_frame_2.txt')),
 ]
+
+
+garbage_frames = []
+
+for fname in os.listdir(GARBAGE_DIR):
+    if fname.endswith('.txt'):
+        garbage_frames.append(load_frame(os.path.join(GARBAGE_DIR, fname)))
 
 
 def blink(canvas, row, col, symbol='*', offset=0, frames=BLINK_FRAMES):
@@ -120,6 +128,12 @@ def draw(canvas):
         phase = random.randrange(TOTAL_TICKS)
         coros.append(blink(canvas, r, c, sym, offset=phase))
 
+    for _ in range(20):
+        frame = random.choice(garbage_frames)
+        col = random.randint(1, max_c - len(frame.splitlines()[0]) - 1)
+        speed = random.uniform(0.2, 0.8)
+        coros.append(space_garbage.fly_garbage(canvas, col, frame, speed=speed))
+                     
     mid_r, mid_c = max_r // 2, max_c // 2
     coros.append(fire(canvas, mid_r, mid_c, rows_speed=-0.3, cols_speed=0))
 
