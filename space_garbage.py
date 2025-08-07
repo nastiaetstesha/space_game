@@ -1,8 +1,9 @@
 import asyncio
 import random
 from animation import draw_frame
+from main import sleep
 
-SPAWN_INTERVAL = 10 
+SPAWN_INTERVAL = 10
 
 
 async def fly_garbage(canvas, column, garbage_frame, speed=0.5):
@@ -34,5 +35,4 @@ async def fill_orbit_with_garbage(canvas, coroutines, frames):
             fly_garbage(canvas, col, frame, speed=random.uniform(0.3, 0.8))
         )
 
-        for _ in range(SPAWN_INTERVAL):
-            await asyncio.sleep(0)
+        await sleep(SPAWN_INTERVAL)

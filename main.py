@@ -23,6 +23,11 @@ BLINK_FRAMES = [
 TOTAL_TICKS = sum(cnt for _, cnt in BLINK_FRAMES)
 
 
+async def sleep(tics=1):
+    for _ in range(tics):
+        await asyncio.sleep(0)
+
+
 def load_frame(path):
     with open(path, 'r', encoding='utf-8') as f:
         return f.read()
@@ -50,7 +55,7 @@ def blink(canvas, row, col, symbol='*', offset=0, frames=BLINK_FRAMES):
             for attr, count in frames:
                 for _ in range(count):
                     canvas.addstr(row, col, symbol, attr)
-                    await asyncio.sleep(0)
+                    await sleep()
     return _blink()
 
 
@@ -69,8 +74,7 @@ def animate_spaceship(canvas, pos, frames, pause=TIC_TIMEOUT):
                 canvas, curr_pos['row'], curr_pos['col'], frame, negative=False
                 )
             ticks = int(pause / TIC_TIMEOUT)
-            for _ in range(ticks):
-                await asyncio.sleep(0)
+            await sleep(ticks)
 
             prev, prev_pos = frame, curr_pos
     return _anim()
@@ -88,7 +92,7 @@ def control_spaceship(canvas, pos, ship_h, ship_w):
             nc = pos['col'] + dc
             pos['row'] = min(max(min_r, nr), max_rpos)
             pos['col'] = min(max(min_c, nc), max_cpos)
-            await asyncio.sleep(0)
+            await sleep()
     return _control()
 
 
@@ -106,7 +110,7 @@ async def fire(canvas, start_r, start_c, rows_speed=-0.3, cols_speed=0):
     curses.beep()
     while 0 < r < max_r and 0 < c < max_c:
         canvas.addstr(round(r), round(c), sym)
-        await asyncio.sleep(0)
+        await sleep()
         canvas.addstr(round(r), round(c), ' ')
         r += rows_speed
         c += cols_speed
