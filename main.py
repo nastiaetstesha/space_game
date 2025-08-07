@@ -7,6 +7,8 @@ import asyncio
 
 import animation
 import space_garbage
+from physics import update_speed
+
 
 TIC_TIMEOUT = 0.1
 FRAMES_DIR = os.path.join(os.path.dirname(__file__), 'frames')
@@ -73,28 +75,50 @@ def animate_spaceship(canvas, pos, frames, pause=TIC_TIMEOUT):
             animation.draw_frame(
                 canvas, curr_pos['row'], curr_pos['col'], frame, negative=False
                 )
-            ticks = int(pause / TIC_TIMEOUT)
-            await sleep(ticks)
+            # ticks = int(pause / TIC_TIMEOUT)
+            await sleep(2)
 
             prev, prev_pos = frame, curr_pos
     return _anim()
 
 
-def control_spaceship(canvas, pos, ship_h, ship_w):
-    async def _control():
-        max_r, max_c = canvas.getmaxyx()
-        min_r, min_c = 1, 1
-        max_rpos = max_r - ship_h - 1
-        max_cpos = max_c - ship_w - 1
-        while True:
-            dr, dc, _ = animation.read_controls(canvas)
-            nr = pos['row'] + dr
-            nc = pos['col'] + dc
-            pos['row'] = min(max(min_r, nr), max_rpos)
-            pos['col'] = min(max(min_c, nc), max_cpos)
-            await sleep()
-    return _control()
+# def control_spaceship(canvas, pos, ship_h, ship_w):
+#     async def _control():
+#         max_r, max_c = canvas.getmaxyx()
+#         min_r, min_c = 1, 1
+#         max_rpos = max_r - ship_h - 1
+#         max_cpos = max_c - ship_w - 1
+#         while True:
+#             dr, dc, _ = animation.read_controls(canvas)
+#             nr = pos['row'] + dr
+#             nc = pos['col'] + dc
+#             pos['row'] = min(max(min_r, nr), max_rpos)
+#             pos['col'] = min(max(min_c, nc), max_cpos)
+#             await sleep()
+#     return _control()
 
+async def control_spaceship(canvas, pos, ship_h, ship_w):
+    # initial speeds
+    row_speed = column_speed = 0.0
+    while True:
+        # read keys each tick
+        dr, dc, _ = animation.read_controls(canvas)
+        # update speed with physics
+        row_speed, column_speed = update_speed(
+            row_speed, column_speed,
+            dr, dc,
+            row_speed_limit=2, column_speed_limit=2
+        )
+        # update position
+        pos['row'] = min(
+            max(1, pos['row'] + row_speed),
+            canvas.getmaxyx()[0] - ship_h - 1
+        )
+        pos['col'] = min(
+            max(1, pos['col'] + column_speed),
+            canvas.getmaxyx()[1] - ship_w - 1
+        )
+        await sleep()
 
 async def fire(canvas, start_r, start_c, rows_speed=-0.3, cols_speed=0):
     r, c = start_r, start_c
@@ -114,6 +138,39 @@ async def fire(canvas, start_r, start_c, rows_speed=-0.3, cols_speed=0):
         canvas.addstr(round(r), round(c), ' ')
         r += rows_speed
         c += cols_speed
+
+
+async def run_spaceship_and_fire(canvas, coroutines, pos, ship_h, ship_w):
+    """
+     1) обновлять скорость и координаты корабля
+     2) при нажатии пробела спаунить fire()
+    """
+    row_speed = col_speed = 0.0
+
+    while True:
+        dr, dc, is_space = animation.read_controls(canvas)
+
+        row_speed, col_speed = update_speed(
+            row_speed, col_speed,
+            rows_direction=dr, columns_direction=dc
+        )
+
+        max_r, max_c = canvas.getmaxyx()
+        new_r = min(max(1, pos['row'] + row_speed), max_r - ship_h - 1)
+        new_c = min(max(1, pos['col'] + col_speed), max_c - ship_w - 1)
+        pos['row'], pos['col'] = new_r, new_c
+
+        if is_space:
+            coroutines.append(
+                fire(canvas, pos['row'], pos['col'] + ship_w // 2)
+            )
+            # или очередь выстрелов:
+            # for i in range(3):
+            #     coroutines.append(
+            #         fire(canvas, pos['row'], pos['col'] + ship_w//2, rows_speed=-0.3 - i*0.1)
+            #     )
+
+        await asyncio.sleep(0)
 
 
 def draw(canvas):
@@ -136,13 +193,21 @@ def draw(canvas):
         space_garbage.fill_orbit_with_garbage(canvas, coroutines, garbage_frames)
     )
                      
+    # mid_r, mid_c = max_r // 2, max_c // 2
+    # coroutines.append(fire(canvas, mid_r, mid_c, rows_speed=-0.3, cols_speed=0))
+
+    # pos = {'row': mid_r, 'col': mid_c}
+    # coroutines.append(control_spaceship(canvas, pos, ship_h, ship_w))
+    # coroutines.append(animate_spaceship(canvas, pos, spaceship_frames))
     mid_r, mid_c = max_r // 2, max_c // 2
-    coroutines.append(fire(canvas, mid_r, mid_c, rows_speed=-0.3, cols_speed=0))
-
     pos = {'row': mid_r, 'col': mid_c}
-    coroutines.append(control_spaceship(canvas, pos, ship_h, ship_w))
-    coroutines.append(animate_spaceship(canvas, pos, spaceship_frames))
-
+    ship_h, ship_w = animation.get_frame_size(spaceship_frames[0])
+    coroutines.append(
+        run_spaceship_and_fire(canvas, coroutines, pos, ship_h, ship_w)
+    )
+    coroutines.append(
+        animate_spaceship(canvas, pos, spaceship_frames)
+    )
     try:
         while coroutines:
             for coro in coroutines.copy():
