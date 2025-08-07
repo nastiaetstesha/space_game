@@ -1,5 +1,8 @@
-from animation import draw_frame
 import asyncio
+import random
+from animation import draw_frame
+
+SPAWN_INTERVAL = 10 
 
 
 async def fly_garbage(canvas, column, garbage_frame, speed=0.5):
@@ -16,3 +19,20 @@ async def fly_garbage(canvas, column, garbage_frame, speed=0.5):
         await asyncio.sleep(0)
         draw_frame(canvas, row, column, garbage_frame, negative=True)
         row += speed
+
+
+async def fill_orbit_with_garbage(canvas, coroutines, frames):
+    '''Continuously launch garbage-fall coroutines to populate orbit.'''
+
+    max_r, max_c = canvas.getmaxyx()
+    while True:
+        frame = random.choice(frames)
+        width = max(len(line) for line in frame.splitlines())
+        col = random.randint(1, max_c - width - 1)
+
+        coroutines.append(
+            fly_garbage(canvas, col, frame, speed=random.uniform(0.3, 0.8))
+        )
+
+        for _ in range(SPAWN_INTERVAL):
+            await asyncio.sleep(0)

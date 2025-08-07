@@ -11,6 +11,7 @@ import space_garbage
 TIC_TIMEOUT = 0.1
 FRAMES_DIR = os.path.join(os.path.dirname(__file__), 'frames')
 GARBAGE_DIR = os.path.join(os.path.dirname(__file__), 'garbage')
+coroutines = []
 
 
 BLINK_FRAMES = [
@@ -112,6 +113,7 @@ async def fire(canvas, start_r, start_c, rows_speed=-0.3, cols_speed=0):
 
 
 def draw(canvas):
+    global coroutines
     curses.curs_set(False)
     canvas.nodelay(True)
     canvas.border()
@@ -119,35 +121,31 @@ def draw(canvas):
     max_r, max_c = canvas.getmaxyx()
     ship_h, ship_w = animation.get_frame_size(spaceship_frames[0])
 
-    coros = []
-
     for _ in range(100):
         r = random.randint(1, max_r - 2)
         c = random.randint(1, max_c - 2)
         sym = random.choice('+*.:')
         phase = random.randrange(TOTAL_TICKS)
-        coros.append(blink(canvas, r, c, sym, offset=phase))
+        coroutines.append(blink(canvas, r, c, sym, offset=phase))
 
-    for _ in range(20):
-        frame = random.choice(garbage_frames)
-        col = random.randint(1, max_c - len(frame.splitlines()[0]) - 1)
-        speed = random.uniform(0.2, 0.8)
-        coros.append(space_garbage.fly_garbage(canvas, col, frame, speed=speed))
+    coroutines.append(
+        space_garbage.fill_orbit_with_garbage(canvas, coroutines, garbage_frames)
+    )
                      
     mid_r, mid_c = max_r // 2, max_c // 2
-    coros.append(fire(canvas, mid_r, mid_c, rows_speed=-0.3, cols_speed=0))
+    coroutines.append(fire(canvas, mid_r, mid_c, rows_speed=-0.3, cols_speed=0))
 
     pos = {'row': mid_r, 'col': mid_c}
-    coros.append(control_spaceship(canvas, pos, ship_h, ship_w))
-    coros.append(animate_spaceship(canvas, pos, spaceship_frames))
+    coroutines.append(control_spaceship(canvas, pos, ship_h, ship_w))
+    coroutines.append(animate_spaceship(canvas, pos, spaceship_frames))
 
     try:
-        while coros:
-            for coro in coros.copy():
+        while coroutines:
+            for coro in coroutines.copy():
                 try:
                     coro.send(None)
                 except StopIteration:
-                    coros.remove(coro)
+                    coroutines.remove(coro)
             canvas.border()
             canvas.refresh()
             time.sleep(TIC_TIMEOUT)
