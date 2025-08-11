@@ -131,12 +131,29 @@ async def fire(canvas, start_r, start_c, rows_speed=-0.3, cols_speed=0):
     sym = '-' if cols_speed else '|'
     max_r, max_c = canvas.getmaxyx()
     curses.beep()
+
     while 0 < r < max_r and 0 < c < max_c:
-        canvas.addstr(round(r), round(c), sym)
+        row_i, col_i = round(r), round(c)
+
+        hit = False
+        for ob in obstacles:
+            if ob.has_collision(row_i, col_i):  # пуля 1x1
+                hit = True
+                break
+        if hit:
+            return
+
+        canvas.addstr(row_i, col_i, sym)
         await sleep()
-        canvas.addstr(round(r), round(c), ' ')
+        canvas.addstr(row_i, col_i, ' ')
         r += rows_speed
         c += cols_speed
+    # while 0 < r < max_r and 0 < c < max_c:
+    #     canvas.addstr(round(r), round(c), sym)
+    #     await sleep()
+    #     canvas.addstr(round(r), round(c), ' ')
+    #     r += rows_speed
+    #     c += cols_speed
 
 
 async def run_spaceship_and_fire(canvas, coroutines, pos, ship_h, ship_w):
@@ -209,7 +226,7 @@ def draw(canvas):
     )
     if DEBUG_BOXES:
         coroutines.append(show_obstacles(canvas, obstacles))
-        
+
     try:
         while coroutines:
             for coro in coroutines.copy():
