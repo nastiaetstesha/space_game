@@ -2,7 +2,7 @@ import asyncio
 import random
 from animation import draw_frame, get_frame_size
 from main import sleep
-from obstacles import Obstacle, obstacles 
+from obstacles import Obstacle, obstacles, obstacles_in_last_collisions
 
 
 SPAWN_INTERVAL = 10
@@ -32,12 +32,15 @@ async def fly_garbage(canvas, column, garbage_frame, speed=0.5):
 
     row = 0.0
 
-    # создаём препятствие и добавляем в общий список
     obstacle = Obstacle(int(row), int(column), frame_h, frame_w, uid=id(garbage_frame))
     obstacles.append(obstacle)
 
     try:
         while row < rows_num:
+            if obstacle in obstacles_in_last_collisions:
+                obstacles_in_last_collisions.remove(obstacle)
+                break
+            
             draw_frame(canvas, round(row), column, garbage_frame)
             await asyncio.sleep(0)
             draw_frame(canvas, round(row), column, garbage_frame, negative=True)

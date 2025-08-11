@@ -8,7 +8,7 @@ import asyncio
 import animation
 import space_garbage
 from physics import update_speed
-from obstacles import obstacles, show_obstacles
+from obstacles import obstacles, show_obstacles, obstacles_in_last_collisions 
 
 
 TIC_TIMEOUT = 0.1
@@ -137,11 +137,13 @@ async def fire(canvas, start_r, start_c, rows_speed=-0.3, cols_speed=0):
 
         hit = False
         for ob in obstacles:
-            if ob.has_collision(row_i, col_i):  # пуля 1x1
-                hit = True
-                break
-        if hit:
-            return
+            if ob.has_collision(row_i, col_i):
+                obstacles_in_last_collisions.append(ob)
+                return
+        #         hit = True
+        #         break
+        # if hit:
+        #     return
 
         canvas.addstr(row_i, col_i, sym)
         await sleep()

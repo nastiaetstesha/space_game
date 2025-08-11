@@ -2,6 +2,10 @@ import asyncio
 from animation import draw_frame
 
 
+obstacles_in_last_collisions = []
+obstacles = []
+
+
 class Obstacle:
     
     def __init__(self, row, column, rows_size=1, columns_size=1, uid=None):
@@ -86,6 +90,3 @@ def has_collision(obstacle_corner, obstacle_size, obj_corner, obj_size=(1, 1)):
         _is_point_inside(*obj_corner, *obj_size, *obstacle_corner),
         _is_point_inside(*obj_corner, *obj_size, *opposite_obstacle_corner),
     ])
-
-
-obstacles = []
