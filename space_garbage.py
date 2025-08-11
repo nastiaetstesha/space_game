@@ -3,6 +3,7 @@ import random
 from animation import draw_frame, get_frame_size
 from main import sleep
 from obstacles import Obstacle, obstacles, obstacles_in_last_collisions
+from explosion import explode
 
 
 SPAWN_INTERVAL = 10
@@ -39,8 +40,11 @@ async def fly_garbage(canvas, column, garbage_frame, speed=0.5):
         while row < rows_num:
             if obstacle in obstacles_in_last_collisions:
                 obstacles_in_last_collisions.remove(obstacle)
+                center_r = obstacle.row + frame_h // 2
+                center_c = obstacle.column + frame_w // 2
+                await explode(canvas, center_r, center_c)
                 break
-            
+
             draw_frame(canvas, round(row), column, garbage_frame)
             await asyncio.sleep(0)
             draw_frame(canvas, round(row), column, garbage_frame, negative=True)
