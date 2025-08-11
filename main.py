@@ -8,13 +8,14 @@ import asyncio
 import animation
 import space_garbage
 from physics import update_speed
+from obstacles import obstacles, show_obstacles
 
 
 TIC_TIMEOUT = 0.1
 FRAMES_DIR = os.path.join(os.path.dirname(__file__), 'frames')
 GARBAGE_DIR = os.path.join(os.path.dirname(__file__), 'garbage')
 coroutines = []
-
+DEBUG_BOXES = True
 
 BLINK_FRAMES = [
     (curses.A_DIM,    20),
@@ -98,18 +99,15 @@ def animate_spaceship(canvas, pos, frames, pause=TIC_TIMEOUT):
 #     return _control()
 
 async def control_spaceship(canvas, pos, ship_h, ship_w):
-    # initial speeds
+
     row_speed = column_speed = 0.0
     while True:
-        # read keys each tick
         dr, dc, _ = animation.read_controls(canvas)
-        # update speed with physics
         row_speed, column_speed = update_speed(
             row_speed, column_speed,
             dr, dc,
             row_speed_limit=2, column_speed_limit=2
         )
-        # update position
         pos['row'] = min(
             max(1, pos['row'] + row_speed),
             canvas.getmaxyx()[0] - ship_h - 1
@@ -119,6 +117,7 @@ async def control_spaceship(canvas, pos, ship_h, ship_w):
             canvas.getmaxyx()[1] - ship_w - 1
         )
         await sleep()
+
 
 async def fire(canvas, start_r, start_c, rows_speed=-0.3, cols_speed=0):
     r, c = start_r, start_c
@@ -208,6 +207,9 @@ def draw(canvas):
     coroutines.append(
         animate_spaceship(canvas, pos, spaceship_frames)
     )
+    if DEBUG_BOXES:
+        coroutines.append(show_obstacles(canvas, obstacles))
+        
     try:
         while coroutines:
             for coro in coroutines.copy():
