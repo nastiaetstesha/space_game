@@ -9,7 +9,10 @@ import animation
 import space_garbage
 from physics import update_speed
 from obstacles import obstacles, show_obstacles, obstacles_in_last_collisions 
+from gameover import show_gameover
 
+
+GAME_OVER = False
 
 TIC_TIMEOUT = 0.1
 FRAMES_DIR = os.path.join(os.path.dirname(__file__), 'frames')
@@ -68,6 +71,9 @@ def animate_spaceship(canvas, pos, frames, pause=TIC_TIMEOUT):
         prev_pos = dict(pos)
         iter_frames = cycle(frames)
         while True:
+            if GAME_OVER:
+                animation.draw_frame(canvas, prev_pos['row'], prev_pos['col'], prev, negative=True)
+                return
             frame = next(iter_frames)
             curr_pos = {'row': pos['row'], 'col': pos['col']}
             animation.draw_frame(
@@ -163,6 +169,8 @@ async def run_spaceship_and_fire(canvas, coroutines, pos, ship_h, ship_w):
      1) обновлять скорость и координаты корабля
      2) при нажатии пробела спаунить fire()
     """
+    global GAME_OVER
+
     row_speed = col_speed = 0.0
 
     while True:
@@ -178,15 +186,17 @@ async def run_spaceship_and_fire(canvas, coroutines, pos, ship_h, ship_w):
         new_c = min(max(1, pos['col'] + col_speed), max_c - ship_w - 1)
         pos['row'], pos['col'] = new_r, new_c
 
-        if is_space:
+        if is_space and not GAME_OVER:
             coroutines.append(
                 fire(canvas, pos['row'], pos['col'] + ship_w // 2)
             )
-            # или очередь выстрелов:
-            # for i in range(3):
-            #     coroutines.append(
-            #         fire(canvas, pos['row'], pos['col'] + ship_w//2, rows_speed=-0.3 - i*0.1)
-            #     )
+        ship_row = int(pos['row'])
+        ship_col = int(pos['col'])
+        crashed = any(ob.has_collision(ship_row, ship_col, ship_h, ship_w) for ob in obstacles)
+        if crashed:
+            GAME_OVER = True
+            coroutines.append(show_gameover(canvas))
+            return  # корабль исчезает: выходим из корутины - не исчез
 
         await asyncio.sleep(0)
 
