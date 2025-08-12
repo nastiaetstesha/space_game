@@ -70,7 +70,7 @@ def draw_frame(canvas, start_row, start_column, text, negative=False):
 
 def get_frame_size(text):
     """Calculate size of multiline text fragment, return pair — number of rows and colums."""
-    
+
     lines = text.splitlines()
     rows = len(lines)
     columns = max([len(line) for line in lines])
