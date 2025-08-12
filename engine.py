@@ -10,7 +10,7 @@ import space_garbage
 from physics import update_speed
 from obstacles import obstacles, show_obstacles, obstacles_in_last_collisions 
 from gameover import show_gameover
-from game_scenario import PHRASES, get_garbage_delay_tics
+from game_scenario import PHRASES
 import state
 from timing import sleep
 
@@ -67,7 +67,9 @@ def animate_spaceship(canvas, pos, frames, pause=TIC_TIMEOUT):
         iter_frames = cycle(frames)
         while True:
             if state.GAME_OVER:
-                animation.draw_frame(canvas, prev_pos['row'], prev_pos['col'], prev, negative=True)
+                animation.draw_frame(
+                    canvas, prev_pos['row'], prev_pos['col'], prev, negative=True
+                    )
                 return
             frame = next(iter_frames)
             curr_pos = {'row': pos['row'], 'col': pos['col']}
@@ -77,7 +79,7 @@ def animate_spaceship(canvas, pos, frames, pause=TIC_TIMEOUT):
             animation.draw_frame(
                 canvas, curr_pos['row'], curr_pos['col'], frame, negative=False
                 )
-            # ticks = int(pause / TIC_TIMEOUT)
+
             await sleep(2)
 
             prev, prev_pos = frame, curr_pos
@@ -121,7 +123,6 @@ async def fire(canvas, start_r, start_c, rows_speed=-0.3, cols_speed=0):
     while 0 < r < max_r and 0 < c < max_c:
         row_i, col_i = round(r), round(c)
 
-        hit = False
         for ob in obstacles:
             if ob.has_collision(row_i, col_i):
                 obstacles_in_last_collisions.append(ob)
@@ -161,11 +162,13 @@ async def run_spaceship_and_fire(canvas, coroutines, pos, ship_h, ship_w):
             )
         ship_row = int(pos['row'])
         ship_col = int(pos['col'])
-        crashed = any(ob.has_collision(ship_row, ship_col, ship_h, ship_w) for ob in obstacles)
+        crashed = any(ob.has_collision(
+            ship_row, ship_col, ship_h, ship_w) for ob in obstacles
+            )
         if crashed:
             state.GAME_OVER = True
             state.coroutines.append(show_gameover(canvas))
-            return  # корабль исчезает: выходим из корутины - не исчез
+            return
 
         await asyncio.sleep(0)
 
@@ -185,6 +188,7 @@ async def draw_hud(hud):
         rows, cols = hud.getmaxyx()
         hud.border()
         hud.addstr(1, 2, f"Year: {state.year}")
+        
         if state.phrase_tics_left > 0 and state.current_phrase:
             msg = state.current_phrase[:max(0, cols-4)]
             hud.addstr(rows-2, max(2, (cols-len(msg))//2), msg)
